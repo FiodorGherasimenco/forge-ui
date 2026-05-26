@@ -1,5 +1,5 @@
 packages:
+  - 'packages/react'
   - 'packages/react/*'
-  - 'packages/types'
   - 'packages/utils'
   - 'apps/*'

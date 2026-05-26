@@ -1,0 +1,12 @@
+{
+  "name": "storybook-hub",
+  "private": true,
+  "scripts": {
+    "dev": "storybook dev -p 6100",
+    "build-storybook": "storybook build"
+  },
+  "devDependencies": {
+    "@storybook/react-vite": "^8.0.0",
+    "storybook": "^8.0.0"
+  }
+}
