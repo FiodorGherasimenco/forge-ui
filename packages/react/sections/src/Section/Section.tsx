@@ -1,4 +1,5 @@
-import React, { useRef, useLayoutEffect, useSyncExternalStore } from 'react'
+import React, { useRef, useSyncExternalStore, useEffect } from 'react'
+import { cn } from '@forge-ui/utils'
 import { useSectionsStore, SectionContext } from '../store/SectionsContext'
 import { matchRanges, matchText } from '../utils'
 
@@ -9,42 +10,55 @@ export type SectionProps = React.ComponentProps<'section'> & {
   description?: string
 }
 
-export function Section({ pageId, sectionId, description, keywords, children, ...props }: SectionProps) {
-  const sectionRef = useRef<HTMLElement | null>(null)
+export function Section({ pageId, sectionId, description, keywords, children, className, ...props }: SectionProps) {
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const cacheRef = useRef<{ visible: boolean, loading: boolean } | null>(null);
   const store = useSectionsStore()
-  const snapshotCache = useRef<{ searchTerm: string; isVisible: boolean } | null>(null)
 
-  const { searchTerm, isVisible } = useSyncExternalStore(store.subscribe, () => {
+  const { visible, loading } = useSyncExternalStore(store.subscribe, () => {
     const state = store.getState()
-    const isSearchMode = state.searchTerm.length > 0
-    const result = state.matched[sectionId]
-    const isPending = !result || result.searchTerm !== state.searchTerm
     const next = {
-      searchTerm: state.searchTerm,
-      isVisible: isSearchMode ? isPending || result.hasMatch : state.pageId === pageId,
+      loading: false,
+      visible: state.pageId === pageId
     }
-    if (
-      snapshotCache.current &&
-      snapshotCache.current.searchTerm === next.searchTerm &&
-      snapshotCache.current.isVisible === next.isVisible
-    ) return snapshotCache.current
-    snapshotCache.current = next
-    return next
+    if (state.searchTerm.trim().length > 0) {
+      next.visible = state.visible.includes(sectionId);
+      next.loading = state.loading;
+    }
+
+    if (cacheRef.current?.visible !== next.visible || cacheRef.current?.loading !== next.loading) {
+      cacheRef.current = next;
+    }
+
+    return cacheRef.current;
   })
 
-  useLayoutEffect(() => {
-    if (!searchTerm) return
-    const ranges = matchRanges(sectionRef.current, searchTerm)
-    const hasKeywordMatch = matchText(keywords, searchTerm)
-    const hasDescriptionMatch = matchText(description, searchTerm)
-    const hasMatch = ranges.length > 0 || hasKeywordMatch || hasDescriptionMatch
-    store.commit(sectionId, { ranges, hasMatch })
-  }, [sectionId, searchTerm, keywords, description, store])
+  useEffect(() => {
+    store.register(sectionId, {
+      searchContent: (query) => {
+        const matchedRanges = matchRanges(sectionRef.current, query)
+        const matchedKeywords = matchText(keywords, query)
+        const matchedDescription = matchText(description, query)
+
+        return {
+          ranges: matchedRanges,
+          keywords: matchedKeywords,
+          description: matchedDescription
+        }
+      }
+    })
+
+    return () => {
+      store.unregister(sectionId)
+    }
+  }, [sectionId, keywords, description, store]);
 
   return (
     <SectionContext.Provider value={sectionId}>
-      {isVisible && (
-        <section {...props} ref={sectionRef}>
+      {(visible || loading) && (
+        <section {...props} ref={sectionRef} className={cn({
+          'hidden': loading && !visible
+        }, className)}>
           {children}
         </section>
       )}

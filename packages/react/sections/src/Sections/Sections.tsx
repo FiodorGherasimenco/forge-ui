@@ -1,8 +1,7 @@
-import React, { useRef, useLayoutEffect, useSyncExternalStore } from 'react'
-import { cn } from '@forge-ui/utils'
-import { createSectionsStore } from '../store/store'
+import React, { useSyncExternalStore, useEffect, useState } from 'react'
+import { createSectionsStore, SearchContentResult } from '../store/store'
 import { SectionsStoreContext } from '../store/SectionsContext'
-import { setHighlight, scrollFirstMatchIntoView } from '../utils'
+import { setHighlight, scrollFirstMatchIntoView, clearHighlight } from '../utils'
 import { SEARCH_PARAM_KEY } from '../constants'
 
 export type SectionsProps = React.ComponentProps<'div'> & {
@@ -11,44 +10,61 @@ export type SectionsProps = React.ComponentProps<'div'> & {
 }
 
 export function Sections({ defaultPageId, children, className, searchParamKey = SEARCH_PARAM_KEY, ...props }: SectionsProps) {
-  const storeRef = useRef<ReturnType<typeof createSectionsStore> | null>(null)
-  if (storeRef.current === null) {
-    storeRef.current = createSectionsStore({
-      pageId: defaultPageId,
-      searchTerm: typeof window !== 'undefined'
-        ? new URLSearchParams(window.location.search).get(searchParamKey) || ''
-        : '',
-    })
-  }
-  const store = storeRef.current
-  const highlightName = `${searchParamKey}-highlight`
-  const rangesCache = useRef<Range[]>([])
+  const [store] = useState(() => createSectionsStore({
+    pageId: defaultPageId,
+    searchTerm: typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get(searchParamKey) || ''
+      : '',
+  }));
+  const searchTerm = useSyncExternalStore(store.subscribe, () => store.getState().searchTerm);
 
-  const ranges = useSyncExternalStore(store.subscribe, () => {
-    const state = store.getState()
-    if (!state.searchTerm) {
-      if (rangesCache.current.length === 0) return rangesCache.current
-      rangesCache.current = []
-      return rangesCache.current
+  const highlightName = `${searchParamKey}-highlight`;
+
+  useEffect(() => {
+    clearHighlight(highlightName);
+
+    if (!searchTerm) {
+      // reset hightlight
+      return;
     }
-    const next = Object.values(state.matched).flatMap((match) =>
-      match?.searchTerm === state.searchTerm ? match.ranges : []
-    )
-    const prev = rangesCache.current
-    if (prev.length === next.length && next.every((r, i) => r === prev[i])) return prev
-    rangesCache.current = next
-    return next
-  })
 
-  useLayoutEffect(() => {
-    setHighlight(highlightName, ranges)
-    scrollFirstMatchIntoView(ranges)
-  }, [ranges, highlightName])
+    const promises = store.getSections()
+      .map(([sectionId, { searchContent }]) =>
+        Promise.resolve()
+          .then(() => searchContent(searchTerm))
+          .then((result) => ({ sectionId, ...result }))
+      );
+
+    Promise.allSettled(promises)
+      .then((results) =>
+        results
+          .filter((result): result is PromiseFulfilledResult<SearchContentResult & { sectionId: string }> => {
+            if (result.status !== 'fulfilled') {
+              return false
+            }
+
+            const { ranges, keywords, description } = result.value;
+
+            return ranges.length > 0 || keywords.length > 0 || description.length > 0;
+          })
+          .map((result) => result.value)
+      ).then((matches) => {
+        const ranges = matches.map((match) => match.ranges).flat();
+        const sectionIds = matches.map((match) => match.sectionId);
+
+        if (ranges.length > 0) {
+          setHighlight(highlightName, ranges)
+          scrollFirstMatchIntoView(ranges)
+        }
+
+        store.setVisibility(sectionIds);
+      })
+  }, [store, searchTerm]);
 
   return (
     <SectionsStoreContext.Provider value={store}>
       <style>{`::highlight(${highlightName}) { background-color: #fef08a; }`}</style>
-      <div {...props} className={cn('flex gap-6', className)}>
+      <div {...props} className={className}>
         {children}
       </div>
     </SectionsStoreContext.Provider>

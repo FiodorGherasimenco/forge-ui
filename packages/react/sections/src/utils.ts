@@ -42,11 +42,18 @@ export function matchRanges(root: Node | null | undefined, query: string): Range
   return ranges
 }
 
-export function matchText(texts: string | readonly string[] | undefined, query: string): boolean {
-  if (!query || texts === undefined) return false
-  const q = query.toLowerCase()
-  if (typeof texts === 'string') return texts.toLowerCase().includes(q)
-  return texts.some((t) => t.toLowerCase().includes(q))
+export function matchText(texts: string | readonly string[] | undefined, query: string): string[] {
+  if (!query || !texts || Array.isArray(texts) && texts.length === 0) {
+    return [];
+  }
+
+  const q = query.toLowerCase();
+
+  if (typeof texts === 'string') {
+    return texts.toLowerCase().includes(q) ? [texts] : [];
+  }
+
+  return texts.filter((t) => t.toLowerCase().includes(q));
 }
 
 function readHighlightRegistry(): HighlightRegistry | undefined {

@@ -13,7 +13,7 @@ type Story = StoryObj<typeof Sections>
 
 export const Basic: Story = {
   render: () => (
-    <Sections defaultPageId="general" className="p-4">
+    <Sections defaultPageId="general" className="flex gap-10 p-4">
       <div className="w-48 shrink-0">
         <Search className="mb-4" />
         <nav className="flex flex-col gap-1">

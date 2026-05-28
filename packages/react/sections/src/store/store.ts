@@ -1,13 +1,18 @@
-export type Match = {
-  ranges: Range[]
-  hasMatch: boolean
-  searchTerm: string
-}
-
 export type SectionsState = {
   searchTerm: string
   pageId?: string
-  matched: Record<string, Match>
+  visible: string[]
+  loading: boolean
+}
+
+export type SearchContentResult = {
+  ranges: Range[]
+  keywords: string[]
+  description: string[]
+}
+type SearchContent = (query: string) => SearchContentResult | Promise<SearchContentResult>;
+type SectionProps = {
+  searchContent: SearchContent
 }
 
 export type SectionsStore = ReturnType<typeof createSectionsStore>
@@ -16,10 +21,12 @@ export function createSectionsStore(initialState: { pageId?: string; searchTerm?
   let state: SectionsState = {
     searchTerm: initialState.searchTerm ?? '',
     pageId: initialState.pageId,
-    matched: {},
+    loading: false,
+    visible: [],
   }
 
   const listeners = new Set<() => void>()
+  const sections = new Map<string, SectionProps>()
 
   const subscribe = (listener: () => void) => {
     listeners.add(listener)
@@ -33,17 +40,19 @@ export function createSectionsStore(initialState: { pageId?: string; searchTerm?
     listeners.forEach((l) => l())
   }
 
-  const commit = (sectionId: string, match: { ranges: Range[]; hasMatch: boolean }) => {
-    setState({
-      matched: {
-        ...state.matched,
-        [sectionId]: { ...match, searchTerm: state.searchTerm },
-      },
-    })
-  }
+  const getSections = () => Array.from(sections.entries());
 
   const setPageId = (pageId: string) => setState({ pageId })
-  const setSearchTerm = (searchTerm: string) => setState({ searchTerm })
+  const setSearchTerm = (searchTerm: string) => setState({ searchTerm, loading: true })
+  const setVisibility = (sectionIds: string[]) => setState({ visible: sectionIds, loading: false })
 
-  return { subscribe, commit, getState, setState, setSearchTerm, setPageId }
+  const register = (sectionId: string, sectionProps: SectionProps) => {
+    sections.set(sectionId, sectionProps)
+  }
+
+  const unregister = (sectionId: string) => {
+    sections.delete(sectionId)
+  }
+
+  return { subscribe, getSections, getState, setState, setSearchTerm, setPageId, setVisibility, register, unregister }
 }
