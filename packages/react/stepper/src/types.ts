@@ -1,4 +1,4 @@
-import type { StepperStore } from './StepperStore'
+import { StepperStore } from "./store/StepperStore"
 
 export type StepNode = {
   id: string
